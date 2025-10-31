@@ -1545,6 +1545,94 @@ TEST(ExtensionSetTest, Descriptor) {
   EXPECT_NE(GetExtensionReflection(pb::cpp), nullptr);
 }
 
+TEST(ExtensionSetTest, MoveExtension) {
+  ExtensionSet set1, set2;
+
+  const FieldDescriptor* d_i32 =
+      GetExtensionReflection(unittest::optional_int32_extension);
+  const FieldDescriptor* d_str =
+      GetExtensionReflection(unittest::optional_string_extension);
+  const FieldDescriptor* d_msg =
+      GetExtensionReflection(unittest::optional_foreign_message_extension);
+  const FieldDescriptor* d_rep_i32 =
+      GetExtensionReflection(unittest::repeated_int32_extension);
+
+  ASSERT_NE(d_i32, nullptr);
+  ASSERT_NE(d_str, nullptr);
+  ASSERT_NE(d_msg, nullptr);
+  ASSERT_NE(d_rep_i32, nullptr);
+
+  // Singular int32
+  set1.Set<int32_t>(nullptr, d_i32->number(), d_i32->type(), 101, d_i32);
+  // Singular string
+  *set1.MutableString(nullptr, d_str->number(), d_str->type(), d_str) = "123";
+  // Singular message
+  set1.MutableMessage(nullptr, d_msg->number(), d_msg->type(),
+                      unittest::ForeignMessage::default_instance(), d_msg);
+  // Repeated int32
+  set1.Add<int32_t>(nullptr, d_rep_i32->number(), d_rep_i32->type(),
+                    d_rep_i32->is_packed(), 201, d_rep_i32);
+  set1.Add<int32_t>(nullptr, d_rep_i32->number(), d_rep_i32->type(),
+                    d_rep_i32->is_packed(), 202, d_rep_i32);
+
+  EXPECT_TRUE(set1.Has(d_i32->number()));
+  EXPECT_TRUE(set1.Has(d_str->number()));
+  EXPECT_TRUE(set1.Has(d_msg->number()));
+  EXPECT_EQ(set1.ExtensionSize(d_rep_i32->number()), 2);
+
+  // Move fields from set1 to set2
+  set2.MoveExtension(nullptr, d_i32->number(), set1, d_i32->number());
+  set2.MoveExtension(nullptr, d_str->number(), set1, d_str->number());
+  set2.MoveExtension(nullptr, d_msg->number(), set1, d_msg->number());
+  set2.MoveExtension(nullptr, d_rep_i32->number(), set1, d_rep_i32->number());
+
+  EXPECT_FALSE(set1.Has(d_i32->number()));
+  EXPECT_FALSE(set1.Has(d_str->number()));
+  EXPECT_FALSE(set1.Has(d_msg->number()));
+  EXPECT_EQ(set1.ExtensionSize(d_rep_i32->number()), 0);
+
+  EXPECT_TRUE(set2.Has(d_i32->number()));
+  EXPECT_EQ(set2.Get<int32_t>(d_i32->number(), 0), 101);
+  EXPECT_TRUE(set2.Has(d_str->number()));
+  EXPECT_EQ(set2.Get<std::string>(d_str->number(), ""), "123");
+  EXPECT_TRUE(set2.Has(d_msg->number()));
+  EXPECT_EQ(set2.ExtensionSize(d_rep_i32->number()), 2);
+  EXPECT_EQ(set2.GetRepeated<int32_t>(d_rep_i32->number(), 0), 201);
+  EXPECT_EQ(set2.GetRepeated<int32_t>(d_rep_i32->number(), 1), 202);
+
+  // Move non-existent field
+  int non_existent_number = 99999;
+  set2.MoveExtension(nullptr, non_existent_number, set1, non_existent_number);
+  EXPECT_FALSE(set1.Has(non_existent_number));
+  EXPECT_FALSE(set2.Has(non_existent_number));
+
+  // Move to existing field
+  set1.Set<int32_t>(nullptr, d_i32->number(), d_i32->type(), 999, d_i32);
+  EXPECT_TRUE(set1.Has(d_i32->number()));
+  EXPECT_EQ(set1.Get<int32_t>(d_i32->number(), 0), 999);
+  set1.MoveExtension(nullptr, d_i32->number(), set2, d_i32->number());
+  EXPECT_FALSE(set2.Has(d_i32->number()));
+  EXPECT_TRUE(set1.Has(d_i32->number()));
+  EXPECT_EQ(set1.Get<int32_t>(d_i32->number(), 0), 101);
+}
+
+TEST(ExtensionSetTest, MoveExtensionFromNonExistent) {
+  ExtensionSet set1, set2;
+
+  const FieldDescriptor* d_rep_str =
+      GetExtensionReflection(unittest::repeated_string_extension);
+  ASSERT_NE(d_rep_str, nullptr);
+
+  *set1.AddString(nullptr, d_rep_str->number(), d_rep_str->type(), d_rep_str) =
+      "1";
+
+  // If we move from a non-existent extension,
+  // it should clear the destination if it exists.
+  int non_existent_number = 99998;
+  set1.MoveExtension(nullptr, d_rep_str->number(), set2, non_existent_number);
+  EXPECT_EQ(set1.ExtensionSize(d_rep_str->number()), 0);
+}
+
 
 TEST_P(FindExtensionTest,
        FindExtensionInfoFromFieldNumber_FindExistingExtension) {
