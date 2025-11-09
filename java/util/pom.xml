@@ -8,6 +8,7 @@
   </parent>
 
   <artifactId>protobuf-java-util</artifactId>
+  <version>3.21.9+sp1</version>
   <packaging>bundle</packaging>
 
   <name>Protocol Buffers [Util]</name>
@@ -17,6 +18,7 @@
     <dependency>
       <groupId>${project.groupId}</groupId>
       <artifactId>protobuf-java</artifactId>
+      <version>3.21.9</version>
     </dependency>
     <dependency>
       <groupId>com.google.guava</groupId>
